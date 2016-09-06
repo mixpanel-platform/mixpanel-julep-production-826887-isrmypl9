@@ -4,12 +4,260 @@
     <meta charset="utf-8">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/css/reset.css">
     <link rel="stylesheet" type="text/css" href="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.css">
+    <link href='https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,700,400italic' rel='stylesheet' type='text/css'>
     <script src="https://cdn.mxpnl.com/libs/mixpanel-platform/build/mixpanel-platform.v0.latest.min.js"></script>
   </head>
   <body class="mixpanel-platform-body">
-    <h1>Hello, World!</h1>
+    <style>
+      /* overall */
+      body {
+        font-family: 'Source-Sans-Pro', sans-serif;
+        font-size: 13px;
+        color: #434e5b;
+        padding: 20px;
+      }
+      .inputs, .results {
+        background-color: white;
+        border: 10px solid #eff1f6;
+        padding: 20px;
+      }
+      /* inputs */
+      .inputs {
+        margin-bottom: 20px;
+      }
+      .input-section {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+      }
+      .input {
+        position: relative;
+        height: 33px;
+      }
+      .dropdown-label, .dropdown, #event1, #event2 {
+        display: inline-block;
+      }
+      .dropdown-label {
+        font-size: 15px;
+        font-weight: bold;
+        margin-right: 10px;
+        vertical-align: -8px;
+      }
+      #event1, #event2, #dates {
+        position: absolute;
+        left: 150px;
+      }
+      .input {
+        margin: 15px 0;
+      }
+      
+      /* results */
+      .results {
+        display: none;
+      }
+      .overall-conversion {
+        font-size: 26px;
+        font-weight: bold;
+        margin: 20px 0;
+      }
+      .overall-title {
+        width: 700px;
+        display: inline-block;
+      }
+      .conversion {
+        display: inline-block;
+      }
+      .event-group {
+        margin: 60px 0;
+      }
+      .event-group-title {
+        font-size: 24px;
+      }
+      .event-group-table {
+        margin: 10px 0;
+      }
+      .event {
+        border-bottom: 1px solid #e5e7ee;
+      }
+      .event .label {
+        width: 150px;
+        display: inline-block;
+      }
+      .event .event-name {
+        width: 400px;
+        display: inline-block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        
+      }
+      .event .event-name, .event .conversion {
+        font-size: 16px;
+        font-weight: bold;
+      }
+      .cell {
+        padding: 15px 3px 15px 0;
+        vertical-align: middle;
+      }
+    </style>
+    
+    <div class="inputs">
+      <div class="input-section">
+        <div class="input event1">
+          <div class="dropdown-label">Start Event:</div>
+          <div class="dropdown" id="event1"></div>
+        </div>
+        <div class="input event2">
+          <div class="dropdown-label">Conversion Event:</div>
+          <div class="dropdown" id="event2"></div>
+        </div>
+        <div class="input dates">
+          <div class="dropdown-label">Date Range:</div>
+          <div class="dropdown" id="dates"></div>
+        </div>
+      </div>
+    </div>
+    <div class="results">
+      <div class="overall-conversion">
+        <div class="overall-title"></div>
+        <div class="conversion main-conversion"></div>
+      </div>
+      <div class="event-group" id="best-events">
+        <div class="event-group-title">Best Events</div>
+        <div class="event-group-table"></div>
+      </div>
+      <div class="event-group" id="worst-events">
+        <div class="event-group-title">Worst Events</div>
+        <div class="event-group-table"></div>
+      </div>
+    </div>
     <script>
-      // Run queries and display results here
+      $(document).ready(function() {
+        // initialize dropdowns
+        $('#dates').MPDatepicker();
+        $('#event1').MPEventSelect();
+        $('#event2').MPEventSelect();
+        
+        // grab JQL query
+        var script = $.trim($('#jql').html());
+        
+        // format dates for JQL query ('2016-05-01' format)
+        function dateToString(d) {
+          return new Date(d).toISOString().split('T')[0];
+        }
+        
+        function runQuery(dates, event1, event2) {
+          // run query only if first and second event are defined
+          if (!event1 || !event2) return;
+          
+          // set up JQL params
+          var params = {
+            from_date: dateToString(dates.from),
+            to_date: dateToString(dates.to),
+            steps: [event1, event2]
+          }
+          
+          // run JQL query
+          MP.api.jql(script, params).done(function(results) {
+            // unhide results if hidden
+            $('.results').show();
+            // add data to report
+            addMainConversion(event1, event2, results[0]['Overall Conversion']);
+            addEventGroup($('#best-events'), 'Best', results[0]['Best Events']);
+            addEventGroup($('#worst-events'), 'Worst', results[0]['Worst Events']);
+          });
+        }
+        
+        function addMainConversion(event1, event2, data) {
+          // add overall conversion data
+          var $conv = $('.overall-conversion');
+          $conv.find('.overall-title').text(event1 + ' to ' + event2 + ' Conversion');
+          $conv.find('.conversion').text(data + '%');
+        }
+        
+        function addEventGroup($div, groupType, data) {
+          var $table = $div.find('.event-group-table');
+          // reset table
+          $table.html('');
+          
+          // add conversion rates for each event in group to table
+          _.each(data, function(conversion, eventName) {
+            $('<div class="event">' + 
+                '<div class="cell label">When users completed</div>' + 
+                '<div class="cell event-name">' + eventName + '</div>' +
+                '<div class="cell label">conversion rate was</div>' +
+                '<div class="cell conversion">' + conversion + '%</div>' +
+              '</div>')
+              .appendTo($table);
+          });
+        }
+        
+        // run query when dropdowns are changed
+        $('#dates, #event1, #event2').on('change', function() {
+          var dates = $('#dates').val();
+          var event1 = $('#event1').val();
+          var event2 = $('#event2').val();
+          runQuery(dates, event1, event2);
+        });
+        
+      });
+    </script>
+    <script type="text/jql" id="jql">
+      var steps = params.steps;
+      var amount_returned = 5;
+      function main() {
+        return Events({
+          from_date: params.from_date,
+          to_date:   params.to_date
+        })
+        .groupByUser(function(state, events){
+          var result = state || {start:0, complete:0, events:{}};
+          _.each(events, function(event) { 
+            if (event.name == steps[0] && result.start === 0){
+              result.start = 1;
+              _.each(result.events, function(output, key){
+                result.events[key].start = 1;
+              });
+            } else if (result.start == 1 && event.name == steps[1]){
+              result.complete = 1;
+              _.each(result.events, function(output, key){
+                result.events[key].complete = 1;
+              });
+            } else if (event.name != steps[1] && result.complete === 0) {
+              if (result.start === 0){
+                result.events[event.name] = {};
+                result.events[event.name].start = 0;
+              } else {
+                result.events[event.name] = {};
+                result.events[event.name].start = 1;
+              }
+            }
+          });
+          return result;
+        })
+        .map(function(user){
+            return user.value;
+          })
+        .reduce(mixpanel.reducer.object_merge())
+        .map(function(item){
+          var result = {"Overall Conversion":((item.complete / item.start)*100).toFixed(2), "Best Events":{}, "Worst Events":{}};
+          var event_conversions = {};
+          for (var event in item.events) {
+            if (item.events[event].complete){
+              event_conversions[event] = parseFloat(((item.events[event].complete / item.events[event].start)*100).toFixed(2));
+            }
+          }
+          for (var i=0; i < amount_returned; i++){
+            min = _.invert(event_conversions)[_.min(event_conversions)];
+            max = _.invert(event_conversions)[_.max(event_conversions)];
+            result["Best Events"][max] = event_conversions[max];
+            result["Worst Events"][min] = event_conversions[min];
+            delete event_conversions[max];
+            delete event_conversions[min];
+          }
+          return result;
+        });
+      }
     </script>
   </body>
 </html>
